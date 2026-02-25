@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>✨ PhotoBooth</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --border: #2a2a3a;
+    --accent: #f0c060;
+    --accent2: #e060a0;
+    --accent3: #60c0f0;
+    --text: #f0eee8;
+    --text-dim: #888;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.5;
+  }
+
+  header {
+    width: 100%;
+    padding: 24px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
+  }
+
+  .tagline {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  main {
+    width: 100%;
+    max-width: 1100px;
+    padding: 40px 20px;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 32px;
+    align-items: start;
+  }
+
+  /* Camera section */
+  .camera-wrap {
+    position: relative;
+  }
+
+  .viewfinder {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: #000;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 2px solid var(--border);
+    box-shadow: 0 0 60px rgba(240,192,96,0.08), 0 0 0 1px rgba(255,255,255,0.04);
+  }
+
+  #video, #canvas-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  #canvas-preview { display: none; }
+
+  .viewfinder-corner {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-color: var(--accent);
+    border-style: solid;
+    opacity: 0.7;
+    z-index: 2;
+  }
+  .viewfinder-corner.tl { top: 12px; left: 12px; border-width: 2px 0 0 2px; }
+  .viewfinder-corner.tr { top: 12px; right: 12px; border-width: 2px 2px 0 0; }
+  .viewfinder-corner.bl { bottom: 12px; left: 12px; border-width: 0 0 2px 2px; }
+  .viewfinder-corner.br { bottom: 12px; right: 12px; border-width: 0 2px 2px 0; }
+
+  .timer-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-size: 8rem;
+    font-weight: 900;
+    color: white;
+    text-shadow: 0 0 40px rgba(240,192,96,0.8);
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  .flash-overlay {
+    position: absolute;
+    inset: 0;
+    background: white;
+    z-index: 20;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.05s;
+  }
+
+  .flip-badge {
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent3);
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .flip-badge:hover { background: rgba(96,192,240,0.15); border-color: var(--accent3); }
+  .flip-badge.active { background: rgba(96,192,240,0.2); border-color: var(--accent3); color: var(--accent3); }
+
+  .filter-badge {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    z-index: 5;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    align-items: center;
+  }
+
+  .btn {
+    padding: 12px 24px;
+    border-radius: 50px;
+    border: none;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    letter-spacing: 0.02em;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #e08830);
+    color: #0a0a0f;
+    padding: 14px 36px;
+    font-size: 1rem;
+    font-weight: 700;
+    box-shadow: 0 4px 24px rgba(240,192,96,0.3);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(240,192,96,0.4); }
+  .btn-primary:active { transform: scale(0.97); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .btn-ghost:hover { border-color: var(--text-dim); color: var(--text); }
+
+  .shutter-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #e08830);
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s;
+    box-shadow: 0 4px 24px rgba(240,192,96,0.35);
+    flex-shrink: 0;
+  }
+  .shutter-btn::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.4);
+  }
+  .shutter-btn:hover { transform: scale(1.07); }
+  .shutter-btn:active { transform: scale(0.94); }
+  .shutter-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .controls-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+
+  /* Timer select */
+  .timer-select {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .timer-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .timer-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #0a0a0f;
+    font-weight: 700;
+  }
+
+  /* Filters */
+  .filters-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+    margin-top: 14px;
+  }
+  .filters-row::-webkit-scrollbar { display: none; }
+
+  .filter-btn {
+    flex-shrink: 0;
+    padding: 7px 16px;
+    border-radius: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .filter-btn.active {
+    background: rgba(240,192,96,0.12);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Right panel */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .panel-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+  }
+
+  .panel-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: var(--text);
+  }
+
+  /* Strip preview */
+  .strip-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .strip-slot {
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: #0a0a0f;
+    border-radius: 8px;
+    border: 1px dashed var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .strip-slot.filled { border-style: solid; border-color: var(--border); }
+  .strip-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 7px;
+  }
+  .strip-slot-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    color: var(--border);
+    font-weight: 900;
+  }
+  .strip-slot .flip-slot-btn {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid rgba(96,192,240,0.4);
+    color: var(--accent3);
+    font-size: 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 2;
+  }
+  .strip-slot:hover .flip-slot-btn { opacity: 1; }
+  .strip-slot .remove-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.7);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: white;
+    font-size: 0.7rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .strip-slot:hover .remove-btn { opacity: 1; }
+
+  .strip-count {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    text-align: center;
+    margin-top: -4px;
+  }
+
+  /* Download area */
+  .layout-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .layout-opt {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 8px;
+    cursor: pointer;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    transition: all 0.15s;
+  }
+  .layout-opt.active {
+    border-color: var(--accent2);
+    color: var(--accent2);
+    background: rgba(224,96,160,0.08);
+  }
+  .layout-opt .icon { font-size: 1.4rem; display: block; margin-bottom: 4px; }
+
+  .btn-download {
+    width: 100%;
+    background: linear-gradient(135deg, var(--accent2), #b03070);
+    color: white;
+    padding: 13px;
+    border-radius: 50px;
+    border: none;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(224,96,160,0.3);
+  }
+  .btn-download:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(224,96,160,0.4); }
+  .btn-download:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+  /* Frame colors */
+  .color-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .color-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .color-dot.selected { border-color: white; transform: scale(1.15); }
+
+  /* Status */
+  #status-msg {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    text-align: center;
+    min-height: 20px;
+  }
+
+  /* No camera */
+  .no-camera {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 100%;
+    color: var(--text-dim);
+    padding: 40px;
+    text-align: center;
+  }
+  .no-camera .icon { font-size: 3rem; }
+
+  /* Flash animation */
+  @keyframes flashIn {
+    0% { opacity: 0; }
+    30% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  @keyframes timerPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+
+  .countdown-num {
+    animation: timerPulse 0.5s ease-in-out;
+  }
+
+  /* Hidden canvas */
+  #offscreen-canvas { display: none; }
+
+  @media (max-width: 768px) {
+    main { grid-template-columns: 1fr; }
+    header { padding: 16px 20px; }
+    .logo { font-size: 1.3rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">✦ PhotoBooth</div>
+  <div class="tagline">Chụp ảnh kỷ niệm</div>
+</header>
+
+<main>
+  <!-- Left: Camera -->
+  <div class="camera-wrap">
+    <div class="viewfinder" id="viewfinder">
+      <div class="viewfinder-corner tl"></div>
+      <div class="viewfinder-corner tr"></div>
+      <div class="viewfinder-corner bl"></div>
+      <div class="viewfinder-corner br"></div>
+      <video id="video" autoplay muted playsinline></video>
+      <canvas id="canvas-preview"></canvas>
+      <div class="timer-overlay" id="timer-overlay">3</div>
+      <div class="flash-overlay" id="flash-overlay"></div>
+      <div class="filter-badge" id="filter-badge">Bình thường</div>
+      <div class="flip-badge" id="flip-badge" onclick="toggleFlip()">
+        <span>↔</span><span id="flip-label">Lật ảnh</span>
+      </div>
+      <div class="no-camera" id="no-camera" style="display:none">
+        <div class="icon">📷</div>
+        <div>Vui lòng cho phép truy cập camera</div>
+        <button class="btn btn-ghost" onclick="initCamera()">Thử lại</button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="shutter-btn" id="shutter-btn" onclick="capturePhoto()" title="Chụp ảnh"></button>
+      <div style="flex:1">
+        <div style="font-size:0.82rem; color:var(--text-dim); margin-bottom:6px">Hẹn giờ chụp</div>
+        <div class="timer-select">
+          <button class="timer-btn active" data-sec="0" onclick="setTimer(0,this)">0s</button>
+          <button class="timer-btn" data-sec="3" onclick="setTimer(3,this)">3s</button>
+          <button class="timer-btn" data-sec="5" onclick="setTimer(5,this)">5s</button>
+          <button class="timer-btn" data-sec="10" onclick="setTimer(10,this)">10s</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls-row">
+      <div>
+        <div style="font-size:0.78rem; color:var(--text-dim); margin-bottom:6px">Bộ lọc</div>
+        <div class="filters-row" id="filters-row"></div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px; text-align:center">
+      <div id="status-msg">Sẵn sàng chụp ảnh ✨</div>
+    </div>
+  </div>
+
+  <!-- Right: Panel -->
+  <div class="panel">
+    <!-- Strip -->
+    <div class="panel-card">
+      <div class="panel-title">Ảnh đã chụp</div>
+      <div class="strip-preview" id="strip-preview">
+        <div class="strip-slot" id="slot-0"><span class="strip-slot-num">1</span></div>
+        <div class="strip-slot" id="slot-1"><span class="strip-slot-num">2</span></div>
+        <div class="strip-slot" id="slot-2"><span class="strip-slot-num">3</span></div>
+        <div class="strip-slot" id="slot-3"><span class="strip-slot-num">4</span></div>
+      </div>
+      <div class="strip-count" id="strip-count">0 / 4 ảnh</div>
+    </div>
+
+    <!-- Export -->
+    <div class="panel-card">
+      <div class="panel-title">Tải xuống</div>
+
+      <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px">Bố cục</div>
+      <div class="layout-options" id="layout-options">
+        <div class="layout-opt active" data-layout="strip" onclick="setLayout('strip',this)">
+          <span class="icon">🎞️</span>Dải phim
+        </div>
+        <div class="layout-opt" data-layout="grid" onclick="setLayout('grid',this)">
+          <span class="icon">⊞</span>Lưới 2×2
+        </div>
+        <div class="layout-opt" data-layout="single" onclick="setLayout('single',this)">
+          <span class="icon">🖼️</span>Ảnh đơn
+        </div>
+        <div class="layout-opt" data-layout="collage" onclick="setLayout('collage',this)">
+          <span class="icon">🎨</span>Collage
+        </div>
+      </div>
+
+      <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:8px">Màu khung</div>
+      <div class="color-row" id="color-row"></div>
+
+      <div style="margin-top:16px">
+        <button class="btn-download" id="download-btn" onclick="downloadPhoto()" disabled>
+          ↓ Tải xuống ảnh
+        </button>
+      </div>
+
+      <div style="margin-top:10px">
+        <button class="btn btn-ghost" style="width:100%; text-align:center" onclick="clearAll()">
+          🗑 Xoá tất cả
+        </button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<canvas id="offscreen-canvas"></canvas>
+
+<script>
+// State
+let stream = null;
+let timerSec = 0;
+let timerInterval = null;
+let shooting = false;
+let photos = []; // array of dataURLs (max 4)
+let flipStates = [false, false, false, false]; // flip state per slot
+let selectedFilter = 'none';
+let selectedLayout = 'strip';
+let selectedColor = '#ffffff';
+let isMirrored = false;
+
+// Filters
+const FILTERS = [
+  { id: 'none', name: 'Bình thường', css: 'none' },
+  { id: 'vivid', name: 'Vivid', css: 'saturate(1.8) contrast(1.1)' },
+  { id: 'bw', name: 'Đen trắng', css: 'grayscale(1)' },
+  { id: 'warm', name: 'Ấm áp', css: 'sepia(0.35) saturate(1.3)' },
+  { id: 'cool', name: 'Lạnh', css: 'hue-rotate(180deg) saturate(0.8)' },
+  { id: 'vintage', name: 'Vintage', css: 'sepia(0.6) contrast(0.85) brightness(0.9)' },
+  { id: 'fade', name: 'Fade', css: 'opacity(0.85) brightness(1.15) contrast(0.8)' },
+  { id: 'drama', name: 'Drama', css: 'contrast(1.5) saturate(0.7) brightness(0.85)' },
+];
+
+const COLORS = ['#ffffff','#111111','#f0c060','#e060a0','#60c0f0','#7060f0','#f06060','#60f090'];
+
+// Init
+async function initCamera() {
+  document.getElementById('no-camera').style.display = 'none';
+  document.getElementById('video').style.display = 'block';
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 960, facingMode: 'user' }, audio: false });
+    document.getElementById('video').srcObject = stream;
+    setStatus('Sẵn sàng chụp ảnh ✨');
+  } catch(e) {
+    document.getElementById('video').style.display = 'none';
+    document.getElementById('no-camera').style.display = 'flex';
+    setStatus('Không thể truy cập camera');
+  }
+}
+
+// Build filter buttons
+function buildFilters() {
+  const row = document.getElementById('filters-row');
+  FILTERS.forEach(f => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn' + (f.id === 'none' ? ' active' : '');
+    btn.textContent = f.name;
+    btn.onclick = () => selectFilter(f, btn);
+    row.appendChild(btn);
+  });
+}
+
+function selectFilter(f, btn) {
+  selectedFilter = f.id;
+  document.getElementById('video').style.filter = f.css;
+  document.getElementById('filter-badge').textContent = f.name;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// Build colors
+function buildColors() {
+  const row = document.getElementById('color-row');
+  COLORS.forEach(c => {
+    const dot = document.createElement('div');
+    dot.className = 'color-dot' + (c === selectedColor ? ' selected' : '');
+    dot.style.background = c;
+    if (c === '#ffffff') dot.style.border = '2px solid var(--border)';
+    dot.onclick = () => {
+      selectedColor = c;
+      document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+      dot.classList.add('selected');
+    };
+    row.appendChild(dot);
+  });
+}
+
+function setTimer(sec, btn) {
+  timerSec = sec;
+  document.querySelectorAll('.timer-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function setLayout(layout, el) {
+  selectedLayout = layout;
+  document.querySelectorAll('.layout-opt').forEach(o => o.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function setStatus(msg) {
+  document.getElementById('status-msg').textContent = msg;
+}
+
+async function capturePhoto() {
+  if (shooting) return;
+  if (photos.length >= 4) { setStatus('Đã đủ 4 ảnh! Hãy xoá để chụp lại.'); return; }
+  if (!stream) { setStatus('Vui lòng bật camera trước'); return; }
+
+  shooting = true;
+  document.getElementById('shutter-btn').disabled = true;
+
+  if (timerSec > 0) {
+    await runTimer(timerSec);
+  }
+
+  await doFlash();
+  takeSnapshot();
+
+  shooting = false;
+  document.getElementById('shutter-btn').disabled = false;
+}
+
+function runTimer(sec) {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('timer-overlay');
+    overlay.style.opacity = 1;
+    let count = sec;
+    overlay.textContent = count;
+    overlay.style.animation = 'none';
+    overlay.offsetHeight;
+
+    const tick = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        clearInterval(tick);
+        overlay.style.opacity = 0;
+        resolve();
+      } else {
+        overlay.textContent = count;
+        overlay.style.animation = 'none';
+        overlay.offsetHeight;
+        overlay.style.animation = 'timerPulse 0.5s';
+      }
+    }, 1000);
+  });
+}
+
+function doFlash() {
+  return new Promise(resolve => {
+    const flash = document.getElementById('flash-overlay');
+    flash.style.transition = 'none';
+    flash.style.opacity = 1;
+    setTimeout(() => {
+      flash.style.transition = 'opacity 0.4s';
+      flash.style.opacity = 0;
+      setTimeout(resolve, 400);
+    }, 80);
+  });
+}
+
+function toggleFlip() {
+  isMirrored = !isMirrored;
+  const video = document.getElementById('video');
+  const badge = document.getElementById('flip-badge');
+  const label = document.getElementById('flip-label');
+  video.style.transform = isMirrored ? 'scaleX(-1)' : 'scaleX(1)';
+  badge.classList.toggle('active', isMirrored);
+  label.textContent = isMirrored ? 'Đang lật' : 'Lật ảnh';
+}
+
+function takeSnapshot() {
+  const video = document.getElementById('video');
+  const offscreen = document.getElementById('offscreen-canvas');
+  const W = video.videoWidth || 640;
+  const H = video.videoHeight || 480;
+  offscreen.width = W;
+  offscreen.height = H;
+  const ctx = offscreen.getContext('2d');
+
+  // Apply filter via canvas
+  const filter = FILTERS.find(f => f.id === selectedFilter);
+  ctx.filter = filter ? filter.css : 'none';
+  if (isMirrored) {
+    ctx.translate(W, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(video, 0, 0, W, H);
+  ctx.filter = 'none';
+
+  const dataURL = offscreen.toDataURL('image/jpeg', 0.92);
+  photos.push(dataURL);
+  updateStrip();
+  setStatus(`Đã chụp ${photos.length}/4 ảnh ✨`);
+}
+
+function updateStrip() {
+  for (let i = 0; i < 4; i++) {
+    const slot = document.getElementById(`slot-${i}`);
+    slot.innerHTML = '';
+    if (photos[i]) {
+      slot.classList.add('filled');
+      const img = document.createElement('img');
+      img.src = photos[i];
+      img.style.transform = flipStates[i] ? 'scaleX(-1)' : 'scaleX(1)';
+      img.style.transition = 'transform 0.3s ease';
+      slot.appendChild(img);
+      // Flip button
+      const flipBtn = document.createElement('button');
+      flipBtn.className = 'flip-slot-btn';
+      flipBtn.title = 'Lật ảnh';
+      flipBtn.innerHTML = '↔';
+      flipBtn.onclick = (e) => { e.stopPropagation(); flipStates[i] = !flipStates[i]; updateStrip(); };
+      slot.appendChild(flipBtn);
+      // Remove button
+      const rmBtn = document.createElement('button');
+      rmBtn.className = 'remove-btn';
+      rmBtn.textContent = '×';
+      rmBtn.onclick = () => removePhoto(i);
+      slot.appendChild(rmBtn);
+    } else {
+      slot.classList.remove('filled');
+      const num = document.createElement('span');
+      num.className = 'strip-slot-num';
+      num.textContent = i + 1;
+      slot.appendChild(num);
+    }
+  }
+  document.getElementById('strip-count').textContent = `${photos.length} / 4 ảnh`;
+  document.getElementById('download-btn').disabled = photos.length === 0;
+}
+
+function removePhoto(i) {
+  photos.splice(i, 1);
+  flipStates.splice(i, 1);
+  flipStates.push(false);
+  updateStrip();
+  setStatus(`${photos.length}/4 ảnh`);
+}
+
+function clearAll() {
+  photos = [];
+  flipStates = [false, false, false, false];
+  updateStrip();
+  setStatus('Đã xoá tất cả. Sẵn sàng chụp lại ✨');
+}
+
+function downloadPhoto() {
+  if (photos.length === 0) return;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  const imgs = photos.map(src => {
+    const img = new Image();
+    img.src = src;
+    return img;
+  });
+
+  Promise.all(imgs.map(img => new Promise(r => { img.onload = r; if (img.complete) r(); }))).then(() => {
+    const PW = imgs[0].naturalWidth;
+    const PH = imgs[0].naturalHeight;
+    const PAD = 24;
+    const GAP = 12;
+
+    function drawImg(ctx, img, idx, dx, dy, dw, dh) {
+      ctx.save();
+      if (flipStates[idx]) {
+        ctx.translate(dx + dw, dy);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, 0, dw, dh);
+      } else {
+        ctx.drawImage(img, dx, dy, dw, dh);
+      }
+      ctx.restore();
+    }
+
+    if (selectedLayout === 'strip') {
+      const cols = 1;
+      const rows = Math.min(photos.length, 4);
+      canvas.width = PW + PAD * 2;
+      canvas.height = PH * rows + GAP * (rows - 1) + PAD * 2 + 60;
+      ctx.fillStyle = selectedColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < rows; i++) {
+        drawImg(ctx, imgs[i], i, PAD, PAD + i * (PH + GAP), PW, PH);
+      }
+      // Footer text
+      ctx.fillStyle = selectedColor === '#ffffff' ? '#888' : 'rgba(255,255,255,0.4)';
+      ctx.font = 'bold 22px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('✦ PhotoBooth', canvas.width / 2, canvas.height - 18);
+
+    } else if (selectedLayout === 'grid') {
+      const n = Math.min(photos.length, 4);
+      canvas.width = PW * 2 + GAP + PAD * 2;
+      canvas.height = PH * 2 + GAP + PAD * 2 + 48;
+      ctx.fillStyle = selectedColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const positions = [[0,0],[1,0],[0,1],[1,1]];
+      for (let i = 0; i < n; i++) {
+        const [col, row] = positions[i];
+        drawImg(ctx, imgs[i], i, PAD + col * (PW + GAP), PAD + row * (PH + GAP), PW, PH);
+      }
+      ctx.fillStyle = selectedColor === '#ffffff' ? '#888' : 'rgba(255,255,255,0.4)';
+      ctx.font = 'bold 20px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('✦ PhotoBooth', canvas.width / 2, canvas.height - 14);
+
+    } else if (selectedLayout === 'single') {
+      canvas.width = PW + PAD * 2;
+      canvas.height = PH + PAD * 2 + 48;
+      ctx.fillStyle = selectedColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      drawImg(ctx, imgs[0], 0, PAD, PAD, PW, PH);
+      ctx.fillStyle = selectedColor === '#ffffff' ? '#888' : 'rgba(255,255,255,0.4)';
+      ctx.font = 'bold 22px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('✦ PhotoBooth', canvas.width / 2, canvas.height - 14);
+
+    } else if (selectedLayout === 'collage') {
+      const n = Math.min(photos.length, 4);
+      canvas.width = PW * 2 + GAP * 2 + PAD * 2;
+      canvas.height = PH + PAD * 2 + 48;
+      ctx.fillStyle = selectedColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < Math.min(n, 2); i++) {
+        drawImg(ctx, imgs[i], i, PAD + i * (PW + GAP), PAD, PW, PH);
+      }
+      ctx.fillStyle = selectedColor === '#ffffff' ? '#888' : 'rgba(255,255,255,0.4)';
+      ctx.font = 'bold 20px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('✦ PhotoBooth', canvas.width / 2, canvas.height - 14);
+    }
+
+    const link = document.createElement('a');
+    link.download = `photobooth_${Date.now()}.jpg`;
+    link.href = canvas.toDataURL('image/jpeg', 0.95);
+    link.click();
+  });
+}
+
+// Init
+buildFilters();
+buildColors();
+initCamera();
+</script>
+</body>
+</html>
